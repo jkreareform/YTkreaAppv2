@@ -1,0 +1,19 @@
+@import 'custom.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .prose {
+    @apply max-w-none;
+  }
+  
+  .prose-sm {
+    @apply text-sm;
+  }
+  
+  .dark\:prose-invert {
+    @apply text-white;
+  }
+}

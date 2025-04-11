@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Direkttest</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uuid@latest/dist/umd/uuidv4.min.js"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+        <h1 class="text-2xl font-bold mb-4">Supabase Direkttest</h1>
+        
+        <div id="app">
+            <!-- Verbindungsstatus -->
+            <div class="mb-6 p-4 bg-gray-100 rounded-lg">
+                <h2 class="font-bold mb-2">Verbindungsstatus</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>Verbunden:</div>
+                    <div id="connection-status">Prüfe...</div>
+                    
+                    <div>Eingeloggt:</div>
+                    <div id="auth-status">Prüfe...</div>
+                    
+                    <div>Benutzer:</div>
+                    <div id="user-info">-</div>
+                    
+                    <div>Fehlermeldung:</div>
+                    <div id="error-info" class="text-red-500">-</div>
+                </div>
+            </div>
+            
+            <!-- Tabellenstatus -->
+            <div class="mb-6 p-4 bg-gray-100 rounded-lg">
+                <h2 class="font-bold mb-2">Tabellenstatus</h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>Tabelle existiert:</div>
+                    <div id="table-status">Prüfe...</div>
+                    
+                    <div>Anzahl Einträge:</div>
+                    <div id="entries-count">-</div>
+                </div>
+            </div>
+            
+            <!-- Aktionen -->
+            <div class="flex flex-wrap gap-3 mb-6">
+                <button id="btn-check" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Verbindung prüfen
+                </button>
+                
+                <button id="btn-login" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                    Anmelden
+                </button>
+                
+                <button id="btn-logout" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                    Abmelden
+                </button>
+                
+                <button id="btn-check-table" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+                    Tabelle prüfen
+                </button>
+                
+                <button id="btn-create-table" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700">
+                    SQL anzeigen
+                </button>
+                
+                <button id="btn-insert" class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">
+                    Test-Eintrag erstellen
+                </button>
+                
+                <button id="btn-fetch" class="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">
+                    Daten abrufen
+                </button>
+            </div>
+            
+            <!-- Log-Bereich -->
+            <div class="mb-6">
+                <h2 class="font-bold mb-2">Log</h2>
+                <div id="log-area" class="bg-black text-green-400 p-4 rounded h-80 overflow-auto font-mono text-sm"></div>
+            </div>
+            
+            <!-- Daten-Bereich -->
+            <div class="mb-6">
+                <h2 class="font-bold mb-2">Abgerufene Daten</h2>
+                <div id="data-area" class="bg-gray-100 p-4 rounded max-h-60 overflow-auto"></div>
+            </div>
+            
+            <!-- SQL für Tabellenerstellung -->
+            <div id="sql-box" class="mb-6 hidden">
+                <h2 class="font-bold mb-2">SQL für Tabellenerstellung</h2>
+                <div class="bg-gray-800 text-blue-400 p-4 rounded overflow-auto font-mono text-sm">
+CREATE TABLE IF NOT EXISTS public.idea_chats (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL,
+  title TEXT NOT NULL,
+  messages JSONB NOT NULL,
+  context JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Add indexes for performance
+CREATE INDEX IF NOT EXISTS idea_chats_user_id_idx ON public.idea_chats(user_id);
+CREATE INDEX IF NOT EXISTS idea_chats_updated_at_idx ON public.idea_chats(updated_at);
+
+-- Enable Row Level Security
+ALTER TABLE public.idea_chats ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for row level security
+DROP POLICY IF EXISTS "Users can view own chats" ON public.idea_chats;
+CREATE POLICY "Users can view own chats" ON public.idea_chats
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own chats" ON public.idea_chats;
+CREATE POLICY "Users can insert own chats" ON public.idea_chats
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own chats" ON public.idea_chats;
+CREATE POLICY "Users can update own chats" ON public.idea_chats
+  FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own chats" ON public.idea_chats;
+CREATE POLICY "Users can delete own chats" ON public.idea_chats
+  FOR DELETE USING (auth.uid() = user_id);
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Supabase Konfiguration - Bitte deine tatsächlichen Werte hier eintragen
+        const SUPABASE_URL = "https://jchhzesfeielqwhhyywo.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpjaGh6ZXNmZWllbHF3aGh5eXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNDAyNDMsImV4cCI6MjA1OTcxNjI0M30.e1Cw67F32LHkgD48xbWI19LCj0NdsEZlwUzPRyTW_rE";
+        
+        // Initialisiere Supabase Client
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // DOM Elemente
+        const connectionStatus = document.getElementById('connection-status');
+        const authStatus = document.getElementById('auth-status');
+        const userInfo = document.getElementById('user-info');
+        const errorInfo = document.getElementById('error-info');
+        const tableStatus = document.getElementById('table-status');
+        const entriesCount = document.getElementById('entries-count');
+        const logArea = document.getElementById('log-area');
+        const dataArea = document.getElementById('data-area');
+        const sqlBox = document.getElementById('sql-box');
+        
+        // Buttons
+        const btnCheck = document.getElementById('btn-check');
+        const btnLogin = document.getElementById('btn-login');
+        const btnLogout = document.getElementById('btn-logout');
+        const btnCheckTable = document.getElementById('btn-check-table');
+        const btnCreateTable = document.getElementById('btn-create-table');
+        const btnInsert = document.getElementById('btn-insert');
+        const btnFetch = document.getElementById('btn-fetch');
+        
+        // Hilfsfunktionen
+        function log(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'mb-1';
+            
+            let colorClass = 'text-green-400'; // Standard
+            if (type === 'error') colorClass = 'text-red-500';
+            if (type === 'warning') colorClass = 'text-yellow-500';
+            if (type === 'success') colorClass = 'text-green-500';
+            
+            logEntry.innerHTML = `<span class="text-gray-500">${time}</span> <span class="${colorClass}">${message}</span>`;
+            logArea.prepend(logEntry);
+            
+            // Console Log
+            if (type === 'error') console.error(message);
+            else if (type === 'warning') console.warn(message);
+            else console.log(message);
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            return new Date(dateString).toLocaleString();
+        }
+        
+        // Initiale Prüfung
+        async function init() {
+            log('Initialisiere Supabase Test...');
+            await checkConnection();
+            await checkTable();
+        }
+        
+        // Verbindung prüfen
+        async function checkConnection() {
+            log('Prüfe Verbindung und Session...');
+            connectionStatus.textContent = 'Prüfe...';
+            authStatus.textContent = 'Prüfe...';
+            userInfo.textContent = '-';
+            errorInfo.textContent = '-';
+            
+            try {
+                const { data, error } = await supabaseClient.auth.getSession();
+                
+                if (error) {
+                    throw error;
+                }
+                
+                connectionStatus.textContent = 'Verbunden';
+                connectionStatus.className = 'text-green-600';
+                
+                if (data && data.session) {
+                    authStatus.textContent = 'Eingeloggt';
+                    authStatus.className = 'text-green-600';
+                    userInfo.textContent = data.session.user.email;
+                    log(`Eingeloggt als ${data.session.user.email}`, 'success');
+                } else {
+                    authStatus.textContent = 'Nicht eingeloggt';
+                    authStatus.className = 'text-red-600';
+                    log('Nicht eingeloggt', 'warning');
+                }
+            } catch (error) {
+                connectionStatus.textContent = 'Fehler';
+                connectionStatus.className = 'text-red-600';
+                errorInfo.textContent = error.message;
+                log(`Verbindungsfehler: ${error.message}`, 'error');
+            }
+        }
+        
+        // Tabelle prüfen
+        async function checkTable() {
+            log('Prüfe idea_chats Tabelle...');
+            tableStatus.textContent = 'Prüfe...';
+            entriesCount.textContent = '-';
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('idea_chats')
+                    .select('id')
+                    .limit(1);
+                    
+                if (error) {
+                    if (error.code === '42P01') { // Relation does not exist
+                        tableStatus.textContent = 'Existiert nicht';
+                        tableStatus.className = 'text-red-600';
+                        log('Tabelle existiert nicht', 'warning');
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    tableStatus.textContent = 'Existiert';
+                    tableStatus.className = 'text-green-600';
+                    log('Tabelle existiert', 'success');
+                    
+                    // Einträge zählen
+                    const { count, error: countError } = await supabaseClient
+                        .from('idea_chats')
+                        .select('*', { count: 'exact', head: true });
+                        
+                    if (countError) {
+                        log(`Fehler beim Zählen: ${countError.message}`, 'error');
+                    } else {
+                        entriesCount.textContent = count || 0;
+                        log(`Tabelle enthält ${count || 0} Einträge`);
+                    }
+                }
+            } catch (error) {
+                tableStatus.textContent = 'Fehler';
+                tableStatus.className = 'text-red-600';
+                errorInfo.textContent = error.message;
+                log(`Fehler beim Prüfen der Tabelle: ${error.message}`, 'error');
+            }
+        }
+        
+        // Login
+        async function login() {
+            log('Starte Login-Prozess...');
+            
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.href
+                    }
+                });
+                
+                if (error) {
+                    throw error;
+                }
+                
+                log('Login-Prozess gestartet, warte auf Redirect...');
+            } catch (error) {
+                log(`Login-Fehler: ${error.message}`, 'error');
+                errorInfo.textContent = error.message;
+            }
+        }
+        
+        // Logout
+        async function logout() {
+            log('Melde ab...');
+            
+            try {
+                const { error } = await supabaseClient.auth.signOut();
+                
+                if (error) {
+                    throw error;
+                }
+                
+                log('Erfolgreich abgemeldet', 'success');
+                await checkConnection();
+            } catch (error) {
+                log(`Abmelde-Fehler: ${error.message}`, 'error');
+                errorInfo.textContent = error.message;
+            }
+        }
+        
+        // SQL anzeigen
+        function showSql() {
+            sqlBox.classList.toggle('hidden');
+            if (!sqlBox.classList.contains('hidden')) {
+                log('SQL für Tabellenerstellung angezeigt');
+            }
+        }
+        
+        // Test-Eintrag erstellen
+        async function insertTestEntry() {
+            log('Erstelle Test-Eintrag...');
+            
+            try {
+                // Session prüfen
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                // Benutzer-ID festlegen
+                let userId;
+                if (session && session.user) {
+                    userId = session.user.id;
+                    log(`Verwende eingeloggte Benutzer-ID: ${userId.substring(0, 8)}...`);
+                } else {
+                    userId = 'test-user-' + uuidv4().substring(0, 8);
+                    log(`Nicht eingeloggt, verwende Test-ID: ${userId}`, 'warning');
+                }
+                
+                // Test-Daten
+                const testId = uuidv4();
+                const testData = {
+                    id: testId,
+                    user_id: userId,
+                    title: `Test ${new Date().toLocaleTimeString()}`,
+                    messages: [
+                        { content: "Dies ist eine Test-Nachricht", isUser: true },
+                        { content: "Dies ist eine Test-Antwort", isUser: false }
+                    ],
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+                
+                log(`Einfügen mit ID: ${testId}`);
+                
+                // Einfügen
+                const { data, error } = await supabaseClient
+                    .from('idea_chats')
+                    .insert([testData]);
+                    
+                if (error) {
+                    throw error;
+                }
+                
+                log('Test-Eintrag erfolgreich erstellt!', 'success');
+                await checkTable();
+            } catch (error) {
+                log(`Fehler beim Einfügen: ${error.message}`, 'error');
+                if (error.details) {
+                    log(`Details: ${error.details}`, 'error');
+                }
+                errorInfo.textContent = error.message;
+            }
+        }
+        
+        // Daten abrufen
+        async function fetchData() {
+            log('Rufe Daten ab...');
+            dataArea.innerHTML = '';
+            
+            try {
+                // Session prüfen
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                
+                // Query aufbauen
+                let query = supabaseClient
+                    .from('idea_chats')
+                    .select('*')
+                    .order('updated_at', { ascending: false })
+                    .limit(10);
+                    
+                // Filter nach Benutzer, falls eingeloggt
+                if (session && session.user) {
+                    query = query.eq('user_id', session.user.id);
+                    log(`Rufe Daten für Benutzer ${session.user.id.substring(0, 8)}... ab`);
+                } else {
+                    log('Nicht eingeloggt, versuche alle Daten abzurufen', 'warning');
+                }
+                
+                // Ausführen
+                const { data, error } = await query;
+                
+                if (error) {
+                    throw error;
+                }
+                
+                // Anzeigen
+                if (data && data.length > 0) {
+                    log(`${data.length} Einträge abgerufen`, 'success');
+                    
+                    // Daten anzeigen
+                    data.forEach(item => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'mb-4 p-3 border-b border-gray-300';
+                        itemDiv.innerHTML = `
+                            <div><strong>ID:</strong> ${item.id}</div>
+                            <div><strong>Titel:</strong> ${item.title}</div>
+                            <div><strong>Benutzer:</strong> ${item.user_id}</div>
+                            <div><strong>Erstellt:</strong> ${formatDate(item.created_at)}</div>
+                            <div><strong>Nachrichten:</strong> ${item.messages ? item.messages.length : 0} Messages</div>
+                        `;
+                        dataArea.appendChild(itemDiv);
+                    });
+                } else {
+                    log('Keine Daten gefunden');
+                    dataArea.innerHTML = '<div class="p-4 text-gray-500">Keine Daten gefunden</div>';
+                }
+            } catch (error) {
+                log(`Fehler beim Abrufen: ${error.message}`, 'error');
+                errorInfo.textContent = error.message;
+                dataArea.innerHTML = `<div class="p-4 text-red-500">Fehler: ${error.message}</div>`;
+            }
+        }
+        
+        // Event Listeners
+        btnCheck.addEventListener('click', checkConnection);
+        btnLogin.addEventListener('click', login);
+        btnLogout.addEventListener('click', logout);
+        btnCheckTable.addEventListener('click', checkTable);
+        btnCreateTable.addEventListener('click', showSql);
+        btnInsert.addEventListener('click', insertTestEntry);
+        btnFetch.addEventListener('click', fetchData);
+        
+        // Initialisieren
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html> 

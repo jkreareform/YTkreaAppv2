@@ -1,0 +1,57 @@
+/* Custom styles for Growth UI */
+
+/* Rotate effect for logo */
+.transform.rotate-1 {
+  transform: rotate(-1deg);
+}
+
+/* Custom focus styles */
+.focus\:ring-primary-500:focus {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgba(107, 120, 255, var(--tw-ring-opacity));
+}
+
+.focus\:border-primary-500:focus {
+  --tw-border-opacity: 1;
+  border-color: rgba(107, 120, 255, var(--tw-border-opacity));
+}
+
+/* Custom hover effects */
+.hover\:bg-primary-700:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgba(69, 70, 221, var(--tw-bg-opacity));
+}
+
+/* Custom input styles */
+input[type="text"]:focus,
+input[type="email"]:focus,
+textarea:focus {
+  box-shadow: 0 0 0 2px rgba(107, 120, 255, 0.2);
+}
+
+/* Smooth transitions */
+.transition {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Progress bar animation */
+@keyframes progress {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+
+.animate-progress {
+  animation: progress 0.5s ease-out forwards;
+}
+
+/* Card hover effect */
+.card-hover-effect {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card-hover-effect:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+} 
